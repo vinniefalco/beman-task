@@ -73,13 +73,25 @@ auto test_affinity() {
     }());
 }
 
+auto inner_task() -> ex::task<int>
+{
+    co_return 42;
+}
+
+auto outer_task() -> ex::task<>
+{
+    auto sched = co_await ex::read_env(ex::get_scheduler);
+    ex::inline_scheduler inline_sched{};
+    std::cout << "test_alloc: scheduler is inline_scheduler = " << std::boolalpha 
+              << (sched == inline_sched) << "\n";
+    co_await inner_task();
+}
+
 void test_alloc()
 {
     allocation_count = 0;
     
-    ex::sync_wait([]() -> ex::task<> {
-        co_await []() -> ex::task<int> { co_return 42; }();
-    }());
+    ex::sync_wait(outer_task());
     
     std::cout << "test_alloc: allocations when one task awaits another = " << allocation_count << "\n";
 }
