@@ -96,6 +96,32 @@ void test_alloc()
     std::cout << "test_alloc: allocations when one task awaits another = " << allocation_count << "\n";
 }
 
+auto inner_task_inline() -> ex::task<int>
+{
+    co_return 42;
+}
+
+auto outer_task_inline() -> ex::task<>
+{
+    ex::inline_scheduler sched{};
+    co_await ex::change_coroutine_scheduler(sched);
+    
+    auto current_sched = co_await ex::read_env(ex::get_scheduler);
+    std::cout << "test_alloc_inline: scheduler is inline_scheduler = " << std::boolalpha 
+              << (current_sched == sched) << "\n";
+    
+    co_await inner_task_inline();
+}
+
+void test_alloc_inline()
+{
+    allocation_count = 0;
+    
+    ex::sync_wait(outer_task_inline());
+    
+    std::cout << "test_alloc_inline: allocations when one task awaits another = " << allocation_count << "\n";
+}
+
 } // namespace
 
 auto main() -> int {
@@ -104,4 +130,5 @@ auto main() -> int {
     test_indirect_cancel();
     test_affinity();
     test_alloc();
+    test_alloc_inline();
 }
