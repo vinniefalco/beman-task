@@ -31,6 +31,9 @@ foreach(test ${task_tests})
     add_executable(beman.task.tests.${test})
     target_sources(beman.task.tests.${test} PRIVATE ${test}.test.cpp)
     target_link_libraries(beman.task.tests.${test} PRIVATE beman::task)
+    if(MSVC)
+        target_compile_options(beman.task.tests.${test} PRIVATE /wd4458)
+    endif()
     add_test(
         NAME beman.task.tests.${test}
         COMMAND $<TARGET_FILE:beman.task.tests.${test}>

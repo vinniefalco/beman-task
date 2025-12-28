@@ -4,8 +4,30 @@
 #include <beman/task/task.hpp>
 #include <beman/execution/execution.hpp>
 #include <cassert>
+#include <cstdlib>
+#include <new>
 
 namespace ex = beman::execution;
+
+// ----------------------------------------------------------------------------
+// Allocation tracking
+
+static std::size_t allocation_count = 0;
+
+void* operator new(std::size_t size) {
+    ++allocation_count;
+    void* ptr = std::malloc(size);
+    if (!ptr) throw std::bad_alloc();
+    return ptr;
+}
+
+void operator delete(void* ptr) noexcept {
+    std::free(ptr);
+}
+
+void operator delete(void* ptr, std::size_t) noexcept {
+    std::free(ptr);
+}
 
 // ----------------------------------------------------------------------------
 
@@ -50,6 +72,18 @@ auto test_affinity() {
         }();
     }());
 }
+
+void test_alloc()
+{
+    allocation_count = 0;
+    
+    ex::sync_wait([]() -> ex::task<> {
+        co_await []() -> ex::task<int> { co_return 42; }();
+    }());
+    
+    std::cout << "test_alloc: allocations when one task awaits another = " << allocation_count << "\n";
+}
+
 } // namespace
 
 auto main() -> int {
@@ -57,4 +91,5 @@ auto main() -> int {
     test_cancel();
     test_indirect_cancel();
     test_affinity();
+    test_alloc();
 }
