@@ -6,6 +6,8 @@
 #include <cassert>
 #include <cstdlib>
 #include <new>
+#include <optional>
+#include <vector>
 
 namespace ex = beman::execution;
 
@@ -122,6 +124,29 @@ void test_alloc_inline()
     std::cout << "test_alloc_inline: allocations when one task awaits another = " << allocation_count << "\n";
 }
 
+auto make_inner_task() -> ex::task<int>
+{
+    co_return 42;
+}
+
+// Use std::vector to defeat HALO - the compiler can't elide
+// when the coroutine escapes into a heap-allocated container
+auto outer_task_no_halo() -> ex::task<>
+{
+    std::vector<ex::task<int>> tasks;
+    tasks.push_back(make_inner_task());
+    co_await std::move(tasks[0]);
+}
+
+void test_alloc_no_halo()
+{
+    allocation_count = 0;
+    
+    ex::sync_wait(outer_task_no_halo());
+    
+    std::cout << "test_alloc_no_halo: allocations with HALO defeated = " << allocation_count << "\n";
+}
+
 } // namespace
 
 auto main() -> int {
@@ -131,4 +156,5 @@ auto main() -> int {
     test_affinity();
     test_alloc();
     test_alloc_inline();
+    test_alloc_no_halo();
 }
