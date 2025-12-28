@@ -4,6 +4,7 @@
 #include <beman/task/task.hpp>
 #include <beman/execution/execution.hpp>
 #include <cassert>
+#include <coroutine>
 #include <cstdlib>
 #include <new>
 #include <optional>
@@ -147,6 +148,45 @@ void test_alloc_no_halo()
     std::cout << "test_alloc_no_halo: allocations with HALO defeated = " << allocation_count << "\n";
 }
 
+std::coroutine_handle<void> suspended_handle;
+
+auto inner_task_affinity() -> ex::task<bool>
+{
+    auto sched = co_await ex::read_env(ex::get_scheduler);
+    ex::inline_scheduler inline_sched{};
+    co_return sched == inline_sched;
+}
+
+auto middle_task_affinity() -> ex::task<bool>
+{
+    // Change to inline_scheduler
+    ex::inline_scheduler sched{};
+    co_await ex::change_coroutine_scheduler(sched);
+    
+    // Verify we're on inline_scheduler
+    auto current = co_await ex::read_env(ex::get_scheduler);
+    bool before = (current == sched);
+    std::cout << "test_affinity_handle: before type erasure, is inline_scheduler = " << std::boolalpha << before << "\n";
+    
+    // Now call inner task - the handle will go through coroutine_handle<void>
+    bool after = co_await inner_task_affinity();
+    std::cout << "test_affinity_handle: after type erasure, is inline_scheduler = " << std::boolalpha << after << "\n";
+    
+    co_return before && after;
+}
+
+auto outer_task_affinity() -> ex::task<>
+{
+    bool preserved = co_await middle_task_affinity();
+    assert(preserved);
+    std::cout << "test_affinity_handle: affinity preserved through coroutine_handle<void> = " << std::boolalpha << preserved << "\n";
+}
+
+void test_affinity_handle()
+{
+    ex::sync_wait(outer_task_affinity());
+}
+
 } // namespace
 
 auto main() -> int {
@@ -157,4 +197,5 @@ auto main() -> int {
     test_alloc();
     test_alloc_inline();
     test_alloc_no_halo();
+    test_affinity_handle();
 }
